@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../../img/favicon.ico">
+  <title>nginx源码文件分析 - 朱易辰的个人网站</title>
+  <link rel="stylesheet" href="../../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../../css/github.min.css">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "nginx\u6e90\u7801\u6587\u4ef6\u5206\u6790";
+    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\nginx\u6e90\u7801\u6587\u4ef6\u5206\u6790.md";
+    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/nginx\u6e90\u7801\u6587\u4ef6\u5206\u6790/";
+  </script>
+  
+  <script src="../../js/jquery-2.1.1.min.js" defer></script>
+  <script src="../../js/modernizr-2.8.3.min.js" defer></script>
+  <script src="../../js/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="../.." class="icon icon-home"> 朱易辰的个人网站</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../..">AboutMe</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">nginx源码注解</span>
+    <ul class="subnav">
+                <li class=" current">
+                    
+    <a class="current" href="./">nginx源码文件分析</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#_1">源码目录</a></li>
+    
+
+    <li class="toctree-l3"><a href="#coreos">core与os文件分类</a></li>
+    
+
+    <li class="toctree-l3"><a href="#http">HTTP文件分析</a></li>
+    
+
+    <li class="toctree-l3"><a href="#_2">代码复杂度分析</a></li>
+    
+
+    </ul>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../..">朱易辰的个人网站</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../..">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>nginx源码注解 &raquo;</li>
+        
+      
+    
+    <li>nginx源码文件分析</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/nginx源码文件分析.md"
+          class="icon icon-github"> Edit on GitHub</a>
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <p>本文目的主要从宏观层面分析nginx源码，对nginx源码文件进行分类，并分析其依赖关系。帮助理解nginx源码宏观结构，对阅读源码起指引作用。</p>
+<h1 id="_1">源码目录</h1>
+<pre><code>src
+├── core
+├── os
+│   └── unix
+├── event
+│   └── modules
+├── http
+│   ├── modules
+│   │   └── perl
+│   └── v2
+├── mail
+├── stream
+└── misc
+</code></pre>
+
+<p>这几个目录间的依赖关系如下：</p>
+<p><img alt="1542800606020" src="../assets/1542800606020.png" /></p>
+<p>我们可以看出几点</p>
+<ul>
+<li>core、os、event是nginx的核心而且3个目录之间的代码都有循环依赖</li>
+<li>http、mail、stream3类模块依赖于底层模块，不存在反向依赖</li>
+<li>core与os目录的定位都是底层模块，os包括各类系统兼容的处理</li>
+<li>core与os中的文件可以再大致的区分为2类</li>
+<li>基础库封装，互相之间依赖较少、没有复杂的处理流程。例如ngx_array、ngx_md5、ngx_palloc、ngx_rbtree等等</li>
+<li>nginx基础流程，包括启动流程、进程管理、模块管理等等。典型文件包括nginx、ngx_cycle、ngx_process_cycle等等</li>
+</ul>
+<h1 id="coreos">core与os文件分类</h1>
+<p><img alt="1542943986133" src="../assets/1542943986133.png" /></p>
+<p>我将core与os2个文件夹下的文件进行了一个简单的分类</p>
+<ul>
+<li>core 核心流程，需要重点研究</li>
+<li>utils 基础库，供核心流程使用，不影响核心流程</li>
+<li>utils(use ngx_cycle-&gt;log)基础库，但是为了调试，使用到了ngx_cycle-&gt;log变量，可以简单与utils放在一起。</li>
+<li>utils(use core) 会影响到核心流程，或受核心流程影响的几个库，主要体现是使用到了一些定义状态的全局变量。</li>
+<li>后2类文件如果能将其与core解耦的话就更好了。</li>
+<li>具体分类如下</li>
+</ul>
+<pre><code class="json">&quot;core&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_process_cycle.o&quot;,
+        &quot;ngx_cycle.o&quot;,
+        &quot;ngx_module.o&quot;,
+        &quot;nginx.o&quot;
+    ]
+},
+&quot;utils&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_setaffinity.o&quot;,
+        &quot;ngx_errno.o&quot;,
+        &quot;ngx_linux_sendfile_chain.o&quot;,
+        &quot;ngx_time.o&quot;,
+        &quot;ngx_send.o&quot;,
+        &quot;ngx_readv_chain.o&quot;,
+        &quot;ngx_recv.o&quot;,
+        &quot;ngx_md5.o&quot;,
+        &quot;ngx_radix_tree.o&quot;,
+        &quot;ngx_palloc.o&quot;,
+        &quot;ngx_spinlock.o&quot;,
+        &quot;ngx_rwlock.o&quot;,
+        &quot;ngx_sha1.o&quot;,
+        &quot;ngx_queue.o&quot;,
+        &quot;ngx_times.o&quot;,
+        &quot;ngx_rbtree.o&quot;,
+        &quot;ngx_parse.o&quot;,
+        &quot;ngx_array.o&quot;,
+        &quot;ngx_proxy_protocol.o&quot;,
+        &quot;ngx_buf.o&quot;,
+        &quot;ngx_regex.o&quot;,
+        &quot;ngx_list.o&quot;,
+        &quot;ngx_crypt.o&quot;,
+        &quot;ngx_alloc.o&quot;,
+        &quot;ngx_channel.o&quot;,
+        &quot;ngx_dlopen.o&quot;,
+        &quot;ngx_shmem.o&quot;,
+        &quot;ngx_udp_sendmsg_chain.o&quot;,
+        &quot;ngx_udp_send.o&quot;,
+        &quot;ngx_writev_chain.o&quot;,
+        &quot;ngx_user.o&quot;,
+        &quot;ngx_socket.o&quot;,
+        &quot;ngx_udp_recv.o&quot;,
+        &quot;ngx_linux_init.o&quot;,
+        &quot;ngx_file.o&quot;,
+        &quot;ngx_inet.o&quot;,
+        &quot;ngx_resolver.o&quot;,
+        &quot;ngx_output_chain.o&quot;,
+        &quot;ngx_files.o&quot;,
+
+        &quot;ngx_parse_time.o&quot;,
+        &quot;ngx_murmurhash.o&quot;,
+        &quot;ngx_cpuinfo.o&quot;
+    ]
+},
+&quot;utils(use ngx_cycle-&gt;log)&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_shmtx.o&quot;,
+        &quot;ngx_crc32.o&quot;,
+        &quot;ngx_hash.o&quot;,
+        &quot;ngx_process.o&quot;,
+        &quot;ngx_setproctitle.o&quot;,
+        &quot;ngx_slab.o&quot;,
+        &quot;ngx_syslog.o&quot;,
+        &quot;ngx_open_file_cache.o&quot;,
+        &quot;ngx_string.o&quot;
+    ]
+},
+&quot;utils(use core)&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_log.o&quot;,
+        &quot;ngx_connection.o&quot;,
+        &quot;ngx_conf_file.o&quot;,
+        &quot;ngx_posix_init.o&quot;,
+        &quot;ngx_daemon.o&quot;
+    ]
+}
+</code></pre>
+
+<h1 id="http">HTTP文件分析</h1>
+<p><img alt="1542802791400" src="../assets/1542802791400.png" /></p>
+<p>http目录下的文件搭建了一套http的处理框架，不仅能高效支持http请求处理，还能使用定义的接口对http处理进行扩展。</p>
+<ul>
+<li>http_core是HTTP模块的核心，包括了处理框架和流程机制。http2的支持其实也可以归并到这个类别中</li>
+<li>http_module是常见的扩展，可以座位自定义模块的参考</li>
+<li>
+<p>http_upstream与http_proxy是2类常见的与后端相关的扩展模块</p>
+</li>
+<li>
+<p>ngx_http_grpc_module本想归类在http_proxy中的，由于其特殊性直接依赖了http_v2的部分功能，所以单独列出。</p>
+</li>
+<li>具体分类方式如下:</li>
+</ul>
+<pre><code class="json">&quot;http_core&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_http.o&quot;,
+        &quot;ngx_http_request.o&quot;,
+        &quot;ngx_http_variables.o&quot;,
+        &quot;ngx_http_request_body.o&quot;,
+        &quot;ngx_http_core_module.o&quot;,
+        &quot;ngx_http_file_cache.o&quot;,
+        &quot;ngx_http_script.o&quot;,
+        &quot;ngx_http_parse.o&quot;,
+        &quot;ngx_http_postpone_filter_module.o&quot;,
+        &quot;ngx_http_special_response.o&quot;,
+        &quot;ngx_http_ssl_module.o&quot;
+    ]
+},
+&quot;http_proxy&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_http_proxy_module.o&quot;,
+        &quot;ngx_http_scgi_module.o&quot;,
+        &quot;ngx_http_fastcgi_module.o&quot;,
+        &quot;ngx_http_uwsgi_module.o&quot;,
+        &quot;ngx_http_memcached_module.o&quot;
+    ]
+},
+
+&quot;http_upstream&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_http_upstream.o&quot;,
+        &quot;ngx_http_upstream_round_robin.o&quot;,
+        &quot;ngx_http_upstream_least_conn_module.o&quot;,
+        &quot;ngx_http_upstream_ip_hash_module.o&quot;,
+        &quot;ngx_http_upstream_zone_module.o&quot;,
+        &quot;ngx_http_upstream_hash_module.o&quot;,
+        &quot;ngx_http_upstream_keepalive_module.o&quot;,
+        &quot;ngx_http_upstream_random_module.o&quot;
+
+    ]
+},
+&quot;http_module&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_http_header_filter_module.o&quot;,
+        &quot;ngx_http_copy_filter_module.o&quot;,
+        &quot;ngx_http_userid_filter_module.o&quot;,
+        &quot;ngx_http_headers_filter_module.o&quot;,
+        &quot;ngx_http_map_module.o&quot;,
+        &quot;ngx_http_charset_filter_module.o&quot;,
+        &quot;ngx_http_index_module.o&quot;,
+        &quot;ngx_http_limit_conn_module.o&quot;,
+        &quot;ngx_http_static_module.o&quot;,
+        &quot;ngx_http_access_module.o&quot;,
+        &quot;ngx_http_auth_basic_module.o&quot;,
+        &quot;ngx_http_range_filter_module.o&quot;,
+        &quot;ngx_http_empty_gif_module.o&quot;,
+        &quot;ngx_http_not_modified_filter_module.o&quot;,
+        &quot;ngx_http_mirror_module.o&quot;,
+        &quot;ngx_http_split_clients_module.o&quot;,
+        &quot;ngx_http_try_files_module.o&quot;,
+        &quot;ngx_http_chunked_filter_module.o&quot;,
+        &quot;ngx_http_geo_module.o&quot;,
+        &quot;ngx_http_rewrite_module.o&quot;,
+        &quot;ngx_http_ssi_filter_module.o&quot;,
+        &quot;ngx_http_log_module.o&quot;,
+        &quot;ngx_http_autoindex_module.o&quot;,
+        &quot;ngx_http_gzip_filter_module.o&quot;,
+        &quot;ngx_http_limit_req_module.o&quot;,
+        &quot;ngx_http_browser_module.o&quot;,
+        &quot;ngx_http_referer_module.o&quot;,
+        &quot;ngx_http_write_filter_module.o&quot;
+    ]
+},
+&quot;http_v2&quot;: {
+    &quot;files&quot;: [
+        &quot;ngx_http_v2_module.o&quot;,
+        &quot;ngx_http_v2_filter_module.o&quot;,
+        &quot;ngx_http_v2.o&quot;,
+        &quot;ngx_http_v2_encode.o&quot;,
+        &quot;ngx_http_v2_huff_decode.o&quot;,
+        &quot;ngx_http_v2_huff_encode.o&quot;,
+        &quot;ngx_http_v2_table.o&quot;
+    ]
+}
+</code></pre>
+
+<h1 id="_2">代码复杂度分析</h1>
+<p>分析nginx代码中复杂度最高的几个函数，其中NLOC表示无注释的代码行数、CCN表示圈复杂度、PARAM表示函数参数个数、length表示总行数。</p>
+<pre><code>========================================
+  NLOC  CCN  PARAM  length  location
+----------------------------------------
+  588    151     1     829   ngx_init_cycle
+  352    133     1     404   ngx_mail_imap_parse_command
+  413    103     9     652   ngx_resolver_process_a
+  599     98     2     739   ngx_http_parse_request_line
+  386     89     1     537   ngx_http_v2_header_filter
+  331     86     1     465   ngx_http_header_filter
+  185     85     1     235   ngx_mail_smtp_parse_command
+  181     85     2     263   ngx_parse_http_time
+  390     83     2     523   ngx_http_ssi_body_filter
+  104     82     4     142   ngx_ssl_connection_error
+  274     76     1     393   ngx_event_pipe_read_upstream
+  313     73     2     463   ngx_http_grpc_filter
+  156     71     1     221   ngx_http_v2_push_resources
+  355     69     1     486   ngx_http_fastcgi_create_request
+  240     64     1     365   ngx_http_grpc_process_header
+  231     63     2     341   ngx_http_upstream_send_response
+  293     62     1     439   ngx_http_fastcgi_process_header
+  349     60     3     494   ngx_http_proxy_merge_loc_conf
+  228     60     4     343   ngx_open_cached_file
+</code></pre>
+
+<p>我们可以看到几点</p>
+<ul>
+<li>解析和构造数据的函数复杂度特别高，但代码稳定，如果需要调整，需要有大量测试用例保障</li>
+<li>ngx_init_cycle是启动的核心流程，涉及范围广、但缺少合理封装，要仔细对待。</li>
+</ul>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="../.." class="btn btn-neutral" title="AboutMe"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a href="https://github.com/atskyline/atskyline.docs/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+        <span><a href="../.." style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+    </span>
+</div>
+    <script>var base_url = '../..';</script>
+    <script src="../../js/theme.js" defer></script>
+      <script src="../../search/main.js" defer></script>
+
+</body>
+</html>

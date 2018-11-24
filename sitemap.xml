@@ -2,12 +2,12 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
      <loc>http://www.atskyline.com/</loc>
-     <lastmod>2018-11-06</lastmod>
+     <lastmod>2018-11-24</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
-     <loc>http://www.atskyline.com/about_me/</loc>
-     <lastmod>2018-11-06</lastmod>
+     <loc>http://www.atskyline.com/nginx源码注解/nginx源码文件分析/</loc>
+     <lastmod>2018-11-24</lastmod>
      <changefreq>daily</changefreq>
     </url>
 </urlset>
