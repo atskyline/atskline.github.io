@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../../img/favicon.ico">
+  <title>reopen机制 - 朱易辰的个人网站</title>
+  <link rel="stylesheet" href="../../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../../css/github.min.css">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "reopen\u673a\u5236";
+    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\reopen\u673a\u5236.md";
+    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/reopen\u673a\u5236/";
+  </script>
+  
+  <script src="../../js/jquery-2.1.1.min.js" defer></script>
+  <script src="../../js/modernizr-2.8.3.min.js" defer></script>
+  <script src="../../js/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="../.." class="icon icon-home"> 朱易辰的个人网站</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../..">AboutMe</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">nginx源码注解</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../nginx源码文件分析/">nginx源码文件分析</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="./">reopen机制</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#nginx">nginx中的日志回滚</a></li>
+    
+
+    <li class="toctree-l3"><a href="#reopen">reopen信号处理流程</a></li>
+    
+
+    <li class="toctree-l3"><a href="#_1">文件管理</a></li>
+    
+
+    </ul>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../..">朱易辰的个人网站</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../..">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>nginx源码注解 &raquo;</li>
+        
+      
+    
+    <li>reopen机制</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/reopen机制.md"
+          class="icon icon-github"> Edit on GitHub</a>
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <p>本文主要分析nginx中的reopen机制是如何辅助实现日志回滚、信号的基本处理流程、master与worker之间的信号交互。</p>
+<h1 id="nginx">nginx中的日志回滚</h1>
+<p>仔细观察nginx的配置项中发现并没有日志回滚的相关配置。其实nginx设计中有考虑日志回滚的需求。实现方式大致如下：</p>
+<ol>
+<li>重命名日志文件</li>
+<li>向master进程发生USR1信号</li>
+<li>归档重命名后的日志文件</li>
+</ol>
+<pre><code class="bash">mv access.log access.log.0
+kill -USR1 `cat master.nginx.pid`
+sleep 1
+gzip access.log.0    # do something with access.log.0
+</code></pre>
+
+<p>官网链接：https://www.nginx.com/resources/wiki/start/topics/examples/logrotation/</p>
+<p>原理大致为外部脚本重命名日志文件后，由于nginx内部维护的文件句柄没有更新，日志写入依然能记录到重命名后的文件中。当nginx收到USR1信号（nginx内部也称为reopen信号）后，重新打开日志文件，更新文件句柄，后续内容就可以重写写入旧文件中。</p>
+<p>这个要求nginx在全局维护所有打开的文件句柄，并且能在master与worker进程都处理reopen信号。</p>
+<h1 id="reopen">reopen信号处理流程</h1>
+<p>信号处理函数<code>ngx_signal_handler()</code>，接受到reopen信号后将全局变量<code>ngx_reopen</code>置1。</p>
+<p>master进程主循环<code>ngx_master_process_cycle()</code>，检测到<code>ngx_reopen</code>置1后执行<code>ngx_reopen_files()</code>，并将信号传递到worker进程中。</p>
+<p>worker进程住循环<code>ngx_worker_process_cycle</code>，检测到<code>ngx_reopen</code>置1后执行<code>ngx_reopen_files()</code>。</p>
+<p><code>ngx_reopen_files()</code>函数中遍历所有已打开的文件，将触发缓存flush进文件、重新打开文件获得新句柄、关闭原句柄。</p>
+<h1 id="_1">文件管理</h1>
+<p>所有文件打开的信息保存在全局<code>cycle-&gt;open_files</code>中。</p>
+<p>文件打开时使用<code>ngx_conf_open_file()</code>函数进行open。</p>
+<p>在<code>ngx_init_cycle()</code>中的最后<code>/* open the new files */</code>会真正打开文件获取句柄。</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="../nginx源码文件分析/" class="btn btn-neutral" title="nginx源码文件分析"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a href="https://github.com/atskyline/atskyline.docs/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+        <span><a href="../nginx源码文件分析/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+    </span>
+</div>
+    <script>var base_url = '../..';</script>
+    <script src="../../js/theme.js" defer></script>
+      <script src="../../search/main.js" defer></script>
+
+</body>
+</html>
