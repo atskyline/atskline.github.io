@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../../img/favicon.ico">
+  <title>filter机制 - 朱易辰的个人网站</title>
+  <link rel="stylesheet" href="../../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="../../css/github.min.css">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "filter\u673a\u5236";
+    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\filter\u673a\u5236.md";
+    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/filter\u673a\u5236/";
+  </script>
+  
+  <script src="../../js/jquery-2.1.1.min.js" defer></script>
+  <script src="../../js/modernizr-2.8.3.min.js" defer></script>
+  <script src="../../js/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="../.." class="icon icon-home"> 朱易辰的个人网站</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../..">AboutMe</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <span class="caption-text">nginx源码注解</span>
+    <ul class="subnav">
+                <li class="">
+                    
+    <a class="" href="../nginx源码文件分析/">nginx源码文件分析</a>
+                </li>
+                <li class="">
+                    
+    <a class="" href="../reopen机制/">reopen机制</a>
+                </li>
+                <li class=" current">
+                    
+    <a class="current" href="./">filter机制</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#nginx">nginx中的过滤器</a></li>
+    
+
+    <li class="toctree-l3"><a href="#filter">请求filter</a></li>
+    
+
+    <li class="toctree-l3"><a href="#filter_1">响应filter</a></li>
+    
+
+    <li class="toctree-l3"><a href="#_1">过滤器顺序</a></li>
+    
+
+    <li class="toctree-l3"><a href="#_2">注意事项</a></li>
+    
+
+    </ul>
+                </li>
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../..">朱易辰的个人网站</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../..">Docs</a> &raquo;</li>
+    
+      
+        
+          <li>nginx源码注解 &raquo;</li>
+        
+      
+    
+    <li>filter机制</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/filter机制.md"
+          class="icon icon-github"> Edit on GitHub</a>
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <p>本文介绍nginx中过滤器的设计，以及功能模块如何使用过滤器。</p>
+<h1 id="nginx">nginx中的过滤器</h1>
+<p>nginx中一共设计了3组过滤器，分别用于处理请求体、响应头、响应体。对应的代码声明再<code>ngx_http.c</code>中。</p>
+<pre><code class="c">ngx_http_output_header_filter_pt  ngx_http_top_header_filter;
+ngx_http_output_body_filter_pt    ngx_http_top_body_filter;
+ngx_http_request_body_filter_pt   ngx_http_top_request_body_filter;
+</code></pre>
+
+<p>对于过滤器设计一般要特别关注最后一个filter，一般会关心到核心流程。中间的filter一般用于模块之间扩展，模块扩展时要注意顺序问题。</p>
+<h1 id="filter">请求filter</h1>
+<p>请求体的过滤器用处比较少，比较少有模块对其扩展。一个重要的filter是ngx_http_request_body_save_filter（）`，它默认是最后一个filter。行为是将请求数据缓存到临时文件中。</p>
+<h1 id="filter_1">响应filter</h1>
+<p>响应数据分为heder与body两部份分别处理，处理方式类似。</p>
+<p>2个过滤器链分别在<code>ngx_http_send_header()</code>与<code>ngx_http_output_filter()</code>中调用，content阶段的模块根据流程需要选择发送的数据。</p>
+<p>模块扩展的方式类似，一般在postconfiguration阶段，将需要新增的filter链接到当前已有链的最前端。实例如下</p>
+<pre><code class="C">ngx_http_next_header_filter = ngx_http_top_header_filter;
+ngx_http_top_header_filter = ngx_http_addition_header_filter;
+ngx_http_next_body_filter = ngx_http_top_body_filter;
+ngx_http_top_body_filter = ngx_http_addition_body_filter;
+</code></pre>
+
+<p>然后在过滤器的处理函数中，通过调用<code>ngx_http_next_xxxx_filter()</code>实现后续过滤器的调用。示例如下</p>
+<pre><code class="C">static ngx_int_t
+ngx_http_addition_body_filter(ngx_http_request_t *r, ngx_chain_t *in) {
+...
+return ngx_http_next_body_filter(r, in);
+...
+}
+</code></pre>
+
+<p>对于响应类的过滤器，最后一级的过滤器是<code>ngx_http_header_filter()</code>与<code>ngx_http_write_filter()</code>，都是讲数据通过send()调用发送到客户端。</p>
+<h1 id="_1">过滤器顺序</h1>
+<p>由于是每个模块单独注册，所以过滤器的顺序与模块的初始化顺序相关。而nginx的设计中静态模块的初始化顺序其实是取决于编译顺序的。所以要注意编译选型的顺序，或者在模块的config文件中显示设置模块顺序。</p>
+<h1 id="_2">注意事项</h1>
+<p>根据实践经验在过滤器的使用上有几点要注意的</p>
+<ul>
+<li>一个请求body_filter要会被多次调用。由于body可能比较大，根据事件的情况，并不会按固定的大小，或数据全部缓存后才调用body_filter，所以编写模块的body_filter时要特别注意。每次body_filter调用的数据buf是不完整的长度不可控的，要注意需要处理的数据被分割到多次调用中。</li>
+<li>body_filter要注意数据是否经过压缩，如果必须对响应的数据进行解析，要特别注意数据被压缩的场景。如果解压和数据处理使用不同模块处理，还要关注模块的调用顺序。</li>
+</ul>
+              
+            </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="../reopen机制/" class="btn btn-neutral" title="reopen机制"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a href="https://github.com/atskyline/atskyline.docs/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+        <span><a href="../reopen机制/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+      
+      
+    </span>
+</div>
+    <script>var base_url = '../..';</script>
+    <script src="../../js/theme.js" defer></script>
+      <script src="../../search/main.js" defer></script>
+
+</body>
+</html>
