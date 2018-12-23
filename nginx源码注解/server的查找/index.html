@@ -8,16 +8,16 @@
   
   
   <link rel="shortcut icon" href="../../img/favicon.ico">
-  <title>reopen机制 - 朱易辰的个人网站</title>
+  <title>server的查找 - 朱易辰的个人网站</title>
   <link rel="stylesheet" href="../../css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../css/theme_extra.css" type="text/css" />
   <link rel="stylesheet" href="../../css/github.min.css">
   
   <script>
     // Current page data
-    var mkdocs_page_name = "reopen\u673a\u5236";
-    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\reopen\u673a\u5236.md";
-    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/reopen\u673a\u5236/";
+    var mkdocs_page_name = "server\u7684\u67e5\u627e";
+    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\server\u7684\u67e5\u627e.md";
+    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/server\u7684\u67e5\u627e/";
   </script>
   
   <script src="../../js/jquery-2.1.1.min.js" defer></script>
@@ -59,21 +59,9 @@
                     
     <a class="" href="../源码文件分析/">源码文件分析</a>
                 </li>
-                <li class=" current">
+                <li class="">
                     
-    <a class="current" href="./">reopen机制</a>
-    <ul class="subnav">
-            
-    <li class="toctree-l3"><a href="#nginx">nginx中的日志回滚</a></li>
-    
-
-    <li class="toctree-l3"><a href="#reopen">reopen信号处理流程</a></li>
-    
-
-    <li class="toctree-l3"><a href="#_1">文件管理</a></li>
-    
-
-    </ul>
+    <a class="" href="../reopen机制/">reopen机制</a>
                 </li>
                 <li class="">
                     
@@ -83,9 +71,21 @@
                     
     <a class="" href="../模块管理/">模块管理</a>
                 </li>
-                <li class="">
+                <li class=" current">
                     
-    <a class="" href="../server的查找/">server的查找</a>
+    <a class="current" href="./">server的查找</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#server_namelisten">server_name与listen配置项</a></li>
+    
+
+    <li class="toctree-l3"><a href="#server">server的查找过程</a></li>
+    
+
+    <li class="toctree-l3"><a href="#server_1">修改server的核心代码</a></li>
+    
+
+    </ul>
                 </li>
     </ul>
 	    </li>
@@ -116,10 +116,10 @@
         
       
     
-    <li>reopen机制</li>
+    <li>server的查找</li>
     <li class="wy-breadcrumbs-aside">
       
-        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/reopen机制.md"
+        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/server的查找.md"
           class="icon icon-github"> Edit on GitHub</a>
       
     </li>
@@ -129,32 +129,30 @@
           <div role="main">
             <div class="section">
               
-                <p>本文主要分析nginx中的reopen机制是如何辅助实现日志回滚、信号的基本处理流程、master与worker之间的信号交互。</p>
-<h1 id="nginx">nginx中的日志回滚</h1>
-<p>仔细观察nginx的配置项中发现并没有日志回滚的相关配置。其实nginx设计中有考虑日志回滚的需求。实现方式大致如下：</p>
-<ol>
-<li>重命名日志文件</li>
-<li>向master进程发生USR1信号</li>
-<li>归档重命名后的日志文件</li>
-</ol>
-<pre><code class="bash">mv access.log access.log.0
-kill -USR1 `cat master.nginx.pid`
-sleep 1
-gzip access.log.0    # do something with access.log.0
+                <p>本文介绍在nginx中http请求接收后，如何查找到对应的srv_conf对象。</p>
+<h1 id="server_namelisten">server_name与listen配置项</h1>
+<p>影响server选择的最主要配置项除了server_name，还有listen。有几个关键点</p>
+<ul>
+<li>请求的IP:PORT需要与server中的listen一致。</li>
+<li>
+<p>server_name的匹配优先级是：精确匹配&gt;后缀匹配&gt;前缀匹配&gt;正则匹配</p>
+</li>
+<li>
+<p>如果无法通过server_name无法匹配合适的server，请求将在IP:PORT对应的默认server中处理。（每一组监听IP:PORT都有一个默认server，通过default_server设置或第一个对应设置监听的server）。</p>
+</li>
+</ul>
+<h1 id="server">server的查找过程</h1>
+<ul>
+<li>在<code>ngx_http_init_connection()</code>中先对connect设置一个默认的server</li>
+<li>对于SSL请求，在SNI的回调用会使用<code>ngx_http_ssl_servername()</code>重新设置connect中的server</li>
+<li>在<code>ngx_http_create_request()</code>时request使用hc的server结果</li>
+<li>在<code>ngx_http_process_request_line()</code>和<code>ngx_http_process_request_header()</code>解析获得请求行或请求头中的HOST信息后将调用<code>ngx_http_set_virtual_server()</code>查找最终使用的server对象。</li>
+</ul>
+<h1 id="server_1">修改server的核心代码</h1>
+<pre><code class="c">// cscf是新查找到的server对象
+r-&gt;srv_conf = cscf-&gt;ctx-&gt;srv_conf;
+r-&gt;loc_conf = cscf-&gt;ctx-&gt;loc_conf;
 </code></pre>
-
-<p>官网链接：https://www.nginx.com/resources/wiki/start/topics/examples/logrotation/</p>
-<p>原理大致为外部脚本重命名日志文件后，由于nginx内部维护的文件句柄没有更新，日志写入依然能记录到重命名后的文件中。当nginx收到USR1信号（nginx内部也称为reopen信号）后，重新打开日志文件，更新文件句柄，后续内容就可以重写写入旧文件中。</p>
-<p>这个要求nginx在全局维护所有打开的文件句柄，并且能在master与worker进程都处理reopen信号。</p>
-<h1 id="reopen">reopen信号处理流程</h1>
-<p>信号处理函数<code>ngx_signal_handler()</code>，接受到reopen信号后将全局变量<code>ngx_reopen</code>置1。</p>
-<p>master进程主循环<code>ngx_master_process_cycle()</code>，检测到<code>ngx_reopen</code>置1后执行<code>ngx_reopen_files()</code>，并将信号传递到worker进程中。</p>
-<p>worker进程住循环<code>ngx_worker_process_cycle</code>，检测到<code>ngx_reopen</code>置1后执行<code>ngx_reopen_files()</code>。</p>
-<p><code>ngx_reopen_files()</code>函数中遍历所有已打开的文件，将触发缓存flush进文件、重新打开文件获得新句柄、关闭原句柄。</p>
-<h1 id="_1">文件管理</h1>
-<p>所有文件打开的信息保存在全局<code>cycle-&gt;open_files</code>中。</p>
-<p>文件打开时使用<code>ngx_conf_open_file()</code>函数进行open。</p>
-<p>在<code>ngx_init_cycle()</code>中的最后<code>/* open the new files */</code>会真正打开文件获取句柄。</p>
               
             </div>
           </div>
@@ -162,10 +160,8 @@ gzip access.log.0    # do something with access.log.0
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../filter机制/" class="btn btn-neutral float-right" title="filter机制">Next <span class="icon icon-circle-arrow-right"></span></a>
       
-      
-        <a href="../源码文件分析/" class="btn btn-neutral" title="源码文件分析"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../模块管理/" class="btn btn-neutral" title="模块管理"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -193,10 +189,8 @@ gzip access.log.0    # do something with access.log.0
           <a href="https://github.com/atskyline/atskyline.docs/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
       
       
-        <span><a href="../源码文件分析/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../模块管理/" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
-      
-        <span style="margin-left: 15px"><a href="../filter机制/" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
