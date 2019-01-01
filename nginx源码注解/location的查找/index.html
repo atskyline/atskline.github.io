@@ -8,16 +8,16 @@
   
   
   <link rel="shortcut icon" href="../../img/favicon.ico">
-  <title>server的查找 - 朱易辰的个人网站</title>
+  <title>location的查找 - 朱易辰的个人网站</title>
   <link rel="stylesheet" href="../../css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../css/theme_extra.css" type="text/css" />
   <link rel="stylesheet" href="../../css/github.min.css">
   
   <script>
     // Current page data
-    var mkdocs_page_name = "server\u7684\u67e5\u627e";
-    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\server\u7684\u67e5\u627e.md";
-    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/server\u7684\u67e5\u627e/";
+    var mkdocs_page_name = "location\u7684\u67e5\u627e";
+    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\location\u7684\u67e5\u627e.md";
+    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/location\u7684\u67e5\u627e/";
   </script>
   
   <script src="../../js/jquery-2.1.1.min.js" defer></script>
@@ -71,25 +71,28 @@
                     
     <a class="" href="../模块管理/">模块管理</a>
                 </li>
+                <li class="">
+                    
+    <a class="" href="../server的查找/">server的查找</a>
+                </li>
                 <li class=" current">
                     
-    <a class="current" href="./">server的查找</a>
+    <a class="current" href="./">location的查找</a>
     <ul class="subnav">
             
-    <li class="toctree-l3"><a href="#server_namelisten">server_name与listen配置项</a></li>
+    <li class="toctree-l3"><a href="#location">location的类型</a></li>
     
 
-    <li class="toctree-l3"><a href="#server">server的查找过程</a></li>
+    <li class="toctree-l3"><a href="#location_1">location嵌套</a></li>
     
 
-    <li class="toctree-l3"><a href="#server_1">修改server的核心代码</a></li>
+    <li class="toctree-l3"><a href="#location_2">location结构优化</a></li>
+    
+
+    <li class="toctree-l3"><a href="#location_3">location查找过程</a></li>
     
 
     </ul>
-                </li>
-                <li class="">
-                    
-    <a class="" href="../location的查找/">location的查找</a>
                 </li>
     </ul>
 	    </li>
@@ -120,10 +123,10 @@
         
       
     
-    <li>server的查找</li>
+    <li>location的查找</li>
     <li class="wy-breadcrumbs-aside">
       
-        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/server的查找.md"
+        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/location的查找.md"
           class="icon icon-github"> Edit on GitHub</a>
       
     </li>
@@ -133,30 +136,46 @@
           <div role="main">
             <div class="section">
               
-                <p>本文介绍在nginx中http请求接收后，如何查找到对应的srv_conf对象。</p>
-<h1 id="server_namelisten">server_name与listen配置项</h1>
-<p>影响server选择的最主要配置项除了server_name，还有listen。有几个关键点</p>
+                <p>本文分析nginx源码中关于location的类型、存储结构、查找过程。</p>
+<h1 id="location">location的类型</h1>
+<p>根据nginx文档http://nginx.org/en/docs/http/ngx_http_core_module.html#location说明。可以将location分为以下几类：</p>
 <ul>
-<li>请求的IP:PORT需要与server中的listen一致。</li>
+<li>精确匹配 <code>=修饰符+前缀</code></li>
 <li>
-<p>server_name的匹配优先级是：精确匹配&gt;后缀匹配&gt;前缀匹配&gt;正则匹配</p>
+<p>内部loc<code>@修饰符+前缀</code></p>
 </li>
 <li>
-<p>如果无法通过server_name无法匹配合适的server，请求将在IP:PORT对应的默认server中处理。（每一组监听IP:PORT都有一个默认server，通过default_server设置或第一个对应设置监听的server）。</p>
+<p>不执行正则的前缀匹配 <code>^~修饰符+前缀</code></p>
 </li>
+<li>正则匹配 <code>~修饰符+正则</code>或<code>~*修饰符+正则</code></li>
+<li>前缀匹配<code>无修饰符+前缀</code></li>
 </ul>
-<h1 id="server">server的查找过程</h1>
+<p>优先级大致上也是由上而下。</p>
+<p>具体的查找逻辑如下：</p>
 <ul>
-<li>在<code>ngx_http_init_connection()</code>中先对connect设置一个默认的server</li>
-<li>对于SSL请求，在SNI的回调用会使用<code>ngx_http_ssl_servername()</code>重新设置connect中的server</li>
-<li>在<code>ngx_http_create_request()</code>时request使用hc的server结果</li>
-<li>在<code>ngx_http_process_request_line()</code>和<code>ngx_http_process_request_header()</code>解析获得请求行或请求头中的HOST信息后将调用<code>ngx_http_set_virtual_server()</code>查找最终使用的server对象。</li>
+<li>在所有前缀loc中查找到最长匹配locA</li>
+<li>如果locA有<code>=修饰符</code>或<code>^~修饰符</code>或<code>@修饰符</code>则返回locA</li>
+<li>逐个匹配所有的正则loc，找到第一个正则匹配的locB，则返回locB</li>
+<li>如果所有正则匹配都不满足，才返回locA</li>
 </ul>
-<h1 id="server_1">修改server的核心代码</h1>
-<pre><code class="c">// cscf是新查找到的server对象
-r-&gt;srv_conf = cscf-&gt;ctx-&gt;srv_conf;
-r-&gt;loc_conf = cscf-&gt;ctx-&gt;loc_conf;
-</code></pre>
+<h1 id="location_1">location嵌套</h1>
+<p>nginx中的location是允许嵌套的，子location是存放在<code>ngx_http_core_loc_conf_s.locations</code>中的。</p>
+<p>嵌套location存在一些约束详见<code>ngx_http_core_location()</code>函数。</p>
+<ul>
+<li>精确匹配的loc不允许嵌套</li>
+<li>内部loc不允许嵌套</li>
+</ul>
+<p>嵌套对查找过程的影响主要体现在递归上，每次查找都是在同一层loc中查找，查找获得的loc如果还有子loc才用相同方式递归查找。</p>
+<h1 id="location_2">location结构优化</h1>
+<p>在<code>ngx_http_core_location()</code>函数解析获得后loc是存放在queue结构体中的，这样每个请求查找loc的效率不够高，ngx将同层级的前缀loc列表重新排列后形成静态二叉树结构提升查找效率。对于正则loc也单独使用列表维护。</p>
+<p>在<code>ngx_http_block()</code>的尾部，将对所有srv的中的loc结构进行结构优化。其中涉及到2个核心函数<code>ngx_http_init_locations()</code>与<code>ngx_http_init_static_location_trees()</code>。</p>
+<p><code>ngx_http_init_locations()</code>函数将queue结构中的loc重新排序，并获得<code>pclcf-&gt;regex_locations</code>关键列表。</p>
+<p><code>ngx_http_init_static_location_trees()</code>函数将所有的前缀loc处理成二叉树结构，并保存在<code>pclcf-&gt;static_locations</code>中。</p>
+<p>排序和二叉树化都是发生在同层的loc中的，所以每一层loc都有对应的递归操作。</p>
+<h1 id="location_3">location查找过程</h1>
+<p>请求的loc结构的查找确认是发生在<code>ngx_http_core_find_config_phase()</code>阶段中的。其中的核心函数是<code>ngx_http_core_find_location()</code>。</p>
+<p>关键点在<code>pclcf-&gt;static_locations</code>或<code>pclcf-&gt;regex_locations</code>中选择与请求匹配的loc结构。并处理嵌套loc的递归处理。</p>
+<p>逻辑部分在上面已经描述过了，此处不再复述。</p>
               
             </div>
           </div>
@@ -164,10 +183,8 @@ r-&gt;loc_conf = cscf-&gt;ctx-&gt;loc_conf;
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../location的查找/" class="btn btn-neutral float-right" title="location的查找">Next <span class="icon icon-circle-arrow-right"></span></a>
       
-      
-        <a href="../模块管理/" class="btn btn-neutral" title="模块管理"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../server的查找/" class="btn btn-neutral" title="server的查找"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -195,10 +212,8 @@ r-&gt;loc_conf = cscf-&gt;ctx-&gt;loc_conf;
           <a href="https://github.com/atskyline/atskyline.docs/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
       
       
-        <span><a href="../模块管理/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../server的查找/" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
-      
-        <span style="margin-left: 15px"><a href="../location的查找/" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>

@@ -2,32 +2,37 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
      <loc>http://www.atskyline.com/</loc>
-     <lastmod>2018-12-23</lastmod>
+     <lastmod>2019-01-01</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/源码文件分析/</loc>
-     <lastmod>2018-12-23</lastmod>
+     <lastmod>2019-01-01</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/reopen机制/</loc>
-     <lastmod>2018-12-23</lastmod>
+     <lastmod>2019-01-01</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/filter机制/</loc>
-     <lastmod>2018-12-23</lastmod>
+     <lastmod>2019-01-01</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/模块管理/</loc>
-     <lastmod>2018-12-23</lastmod>
+     <lastmod>2019-01-01</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/server的查找/</loc>
-     <lastmod>2018-12-23</lastmod>
+     <lastmod>2019-01-01</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    <url>
+     <loc>http://www.atskyline.com/nginx源码注解/location的查找/</loc>
+     <lastmod>2019-01-01</lastmod>
      <changefreq>daily</changefreq>
     </url>
 </urlset>
