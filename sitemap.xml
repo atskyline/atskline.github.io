@@ -2,62 +2,67 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
      <loc>http://www.atskyline.com/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/源码文件分析/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/nginx版本策略/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/reopen机制/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/filter机制/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/模块管理/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/server的查找/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/location的查找/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/nginx源码注解/http模块执行阶段/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/其他/谈能力/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/其他/谈质量/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
     <url>
      <loc>http://www.atskyline.com/其他/能力雷达/</loc>
-     <lastmod>2019-06-01</lastmod>
+     <lastmod>2019-06-09</lastmod>
+     <changefreq>daily</changefreq>
+    </url>
+    <url>
+     <loc>http://www.atskyline.com/其他/谈零缺陷/</loc>
+     <lastmod>2019-06-09</lastmod>
      <changefreq>daily</changefreq>
     </url>
 </urlset>
