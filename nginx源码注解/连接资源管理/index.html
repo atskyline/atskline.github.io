@@ -8,16 +8,16 @@
   
   
   <link rel="shortcut icon" href="../../img/favicon.ico">
-  <title>模块管理 - 朱易辰的个人网站</title>
+  <title>连接资源管理 - 朱易辰的个人网站</title>
   <link rel="stylesheet" href="../../css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../css/theme_extra.css" type="text/css" />
   <link rel="stylesheet" href="../../css/github.min.css">
   
   <script>
     // Current page data
-    var mkdocs_page_name = "\u6a21\u5757\u7ba1\u7406";
-    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\\u6a21\u5757\u7ba1\u7406.md";
-    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/\u6a21\u5757\u7ba1\u7406/";
+    var mkdocs_page_name = "\u8fde\u63a5\u8d44\u6e90\u7ba1\u7406";
+    var mkdocs_page_input_path = "nginx\u6e90\u7801\u6ce8\u89e3\\\u8fde\u63a5\u8d44\u6e90\u7ba1\u7406.md";
+    var mkdocs_page_url = "/nginx\u6e90\u7801\u6ce8\u89e3/\u8fde\u63a5\u8d44\u6e90\u7ba1\u7406/";
   </script>
   
   <script src="../../js/jquery-2.1.1.min.js" defer></script>
@@ -71,18 +71,9 @@
                     
     <a class="" href="../filter机制/">filter机制</a>
                 </li>
-                <li class=" current">
+                <li class="">
                     
-    <a class="current" href="./">模块管理</a>
-    <ul class="subnav">
-            
-    <li class="toctree-l3"><a href="#_1">模块初始化关键步骤</a></li>
-    
-
-    <li class="toctree-l3"><a href="#ctx_indexindex">关于ctx_index与index</a></li>
-    
-
-    </ul>
+    <a class="" href="../模块管理/">模块管理</a>
                 </li>
                 <li class="">
                     
@@ -100,9 +91,21 @@
                     
     <a class="" href="../共享内存的使用/">共享内存的使用</a>
                 </li>
-                <li class="">
+                <li class=" current">
                     
-    <a class="" href="../连接资源管理/">连接资源管理</a>
+    <a class="current" href="./">连接资源管理</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l3"><a href="#_1">连接池的初始化</a></li>
+    
+
+    <li class="toctree-l3"><a href="#_2">连接的申请与释放</a></li>
+    
+
+    <li class="toctree-l3"><a href="#_3">连接的典型场景</a></li>
+    
+
+    </ul>
                 </li>
     </ul>
 	    </li>
@@ -156,10 +159,10 @@
         
       
     
-    <li>模块管理</li>
+    <li>连接资源管理</li>
     <li class="wy-breadcrumbs-aside">
       
-        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/模块管理.md"
+        <a href="https://github.com/atskyline/atskyline.docs/edit/master/nginx源码注解/连接资源管理.md"
           class="icon icon-github"> Edit on GitHub</a>
       
     </li>
@@ -169,16 +172,76 @@
           <div role="main">
             <div class="section">
               
-                <p>本文介绍nginx的核心模块管理机制。主要涉及<code>ngx_modules[]</code>变量的使用。</p>
-<h1 id="_1">模块初始化关键步骤</h1>
-<p>通过编译脚本生成<code>ngx_modules[]</code>与<code>ngx_module_names[]</code>这2个变量的具体值。</p>
-<p>在<code>ngx_init_cycle()</code>之前调用<code>ngx_preinit_modules()</code>初始化模块的索引信息。</p>
-<p>在<code>ngx_init_cycle()</code>中调用<code>ngx_cycle_modules（）</code>将模块信息保存在<code>cycle-&gt;modules[]</code>之中。</p>
-<p>在<code>ngx_init_cycle()</code>的最后部分调用<code>ngx_init_modules()</code>回调各个模块定义的<code>init_module</code>方法。</p>
-<h1 id="ctx_indexindex">关于ctx_index与index</h1>
-<p><code>ngx_module_t.index</code>属性用于全部模块的索引，对应的是<code>ngx_modules[]</code>或<code>cycle-&gt;modules[]</code>的下标。</p>
-<p><code>ngx_module_t.ctx_index</code>属性用于不同类型模块，例如http模块、stream模块中的<code>cf-&gt;ctx[]</code>下标。</p>
-<p>为了节省空间，并且保证reload失败时配置能正确回滚，<code>ctx_index</code>的值顺序与<code>index</code>的顺序是没有关系的。</p>
+                <p>本文介绍在nginx中连接资源(即ngx_connection_t)的管理与使用。</p>
+<h1 id="_1">连接池的初始化</h1>
+<p>在ngx_cycle_t结构体中维护了几个和连接相关的数据，具体如下</p>
+<pre><code class="C">struct ngx_cycle_s {
+    ....
+    ngx_connection_t         *free_connections;
+    ngx_uint_t                free_connection_n;
+    ngx_uint_t                connection_n;
+    ngx_connection_t         *connections;
+    ngx_event_t              *read_events;
+    ngx_event_t              *write_events;
+}
+</code></pre>
+
+<p>逐一说明一下</p>
+<ul>
+<li>connection_n表示最大的连接数量，通过配置项worker_connections设置</li>
+<li>connections、read_events、write_events都是数组，数组大小为connection_n，且下标都是一一对应，例如connections[i]、read_events[i]、write_events[i]一定是配套使用的一组。connections[i].read = read_events[i],connections[i].write=write_events[i]也始终是成立的。</li>
+<li>free_connections是一个链表的头部，表示空闲的链接，free_connection_n表示空闲连接的数量。</li>
+<li>空闲的链表通过c[i].data当作next指针逐一串联</li>
+<li>利用一个free链管理一个资源池的方式与filter中的ngx_output_chain_ctx_t.free类似</li>
+<li>上述相关资源的初始化都发生在ngx_event_process_init()函数中，即在worker进程初始化时完成。</li>
+</ul>
+<p>关于free链结构可以参考ngx_event_process_init()中的代码</p>
+<pre><code class="C">c = cycle-&gt;connections;
+i = cycle-&gt;connection_n;
+next = NULL;
+
+do {
+    i--;
+    c[i].data = next;
+    c[i].read = &amp;cycle-&gt;read_events[i];
+    c[i].write = &amp;cycle-&gt;write_events[i];
+    c[i].fd = (ngx_socket_t) -1;
+    next = &amp;c[i];
+} while (i);
+
+cycle-&gt;free_connections = next;
+cycle-&gt;free_connection_n = cycle-&gt;connection_n;
+</code></pre>
+
+<h1 id="_2">连接的申请与释放</h1>
+<p>连接的申请与释放就是对cycle-&gt;free_connections的操作，相关的函数有2个ngx_get_connection()与ngx_free_connection().核心的逻辑可以参考代码</p>
+<pre><code class="C">ngx_connection_t *
+ngx_get_connection(ngx_socket_t s, ngx_log_t *log)
+{
+    ...
+    c = ngx_cycle-&gt;free_connections;
+    ngx_cycle-&gt;free_connections = c-&gt;data;
+    ngx_cycle-&gt;free_connection_n--;
+    ...
+}
+
+void
+ngx_free_connection(ngx_connection_t *c)
+{
+    c-&gt;data = ngx_cycle-&gt;free_connections;
+    ngx_cycle-&gt;free_connections = c;
+    ngx_cycle-&gt;free_connection_n++;
+    ...
+}
+</code></pre>
+
+<h1 id="_3">连接的典型场景</h1>
+<p>通过查看ngx_get_connection()与的引用，可以看到连接的主要使用场景</p>
+<ul>
+<li>场景一：作为监听fd的管理，在ngx_event_process_init()函数中会为cycle-&gt;listening中的每个监听绑定一个connection对象，并把connection对象的read事件处理函数设置为ngx_event_accept。</li>
+<li>场景二：accept连接后的管理，在ngx_event_accept()中，在accept获得新连接后会通过connection进行管理，也是业务开发中reqeust-&gt;connection对象的来源。</li>
+<li>场景三：当nginx需要作为客户端发起请求时，调用ngx_event_connect_peer()函数，也会从连接池中申请资源，这个也是upstream-&gt;peer.connection对象的来源。</li>
+</ul>
               
             </div>
           </div>
@@ -186,10 +249,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../server的查找/" class="btn btn-neutral float-right" title="server的查找">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="../../其他/谈能力/" class="btn btn-neutral float-right" title="谈能力">Next <span class="icon icon-circle-arrow-right"></span></a>
       
       
-        <a href="../filter机制/" class="btn btn-neutral" title="filter机制"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../共享内存的使用/" class="btn btn-neutral" title="共享内存的使用"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -217,10 +280,10 @@
           <a href="https://github.com/atskyline/atskyline.docs/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
       
       
-        <span><a href="../filter机制/" style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../共享内存的使用/" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
       
-        <span style="margin-left: 15px"><a href="../server的查找/" style="color: #fcfcfc">Next &raquo;</a></span>
+        <span style="margin-left: 15px"><a href="../../其他/谈能力/" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
